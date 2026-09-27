@@ -1,0 +1,16 @@
+spring:
+  config:
+    import: optional:file:.env[.properties]
+  application:
+    name: ms-digitalfix-workorders
+  sql:
+    init:
+      mode: always
+      continue-on-error: false
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:digitalfix}?sslmode=${DB_SSL_MODE:require}
+    username: ${DB_USER:digitalfix_admin}
+    password: ${DB_PASSWORD:}
+    driver-class-name: org.postgresql.Driver
+server:
+  port: ${SERVER_PORT:8081}
