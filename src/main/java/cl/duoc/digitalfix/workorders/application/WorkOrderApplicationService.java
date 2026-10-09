@@ -12,8 +12,11 @@ import org.springframework.stereotype.Service;
 public class WorkOrderApplicationService {
     private final WorkOrderRepository repository;
 
-    public WorkOrderApplicationService(WorkOrderRepository repository) {
+    private final WorkOrderEventPublisher eventPublisher;
+
+    public WorkOrderApplicationService(WorkOrderRepository repository, WorkOrderEventPublisher eventPublisher) {
         this.repository = repository;
+        this.eventPublisher = eventPublisher;
     }
 
     public WorkOrder create(CreateWorkOrderRequest request) {
@@ -41,13 +44,15 @@ public class WorkOrderApplicationService {
         if (request.status() == OrderStatus.ASSIGNED && !repository.technicianIsActive(technicianId)) {
             throw new IllegalArgumentException("The selected technician does not exist or is inactive. Run seed-technicians.sql and retry.");
         }
-        return repository.update(new WorkOrder(current.id(), current.customerId(), current.serviceId(), technicianId,
+        WorkOrder updated = repository.update(new WorkOrder(current.id(), current.customerId(), current.serviceId(), technicianId,
             request.status(), current.title(), current.description(), current.address(),
                 request.observations() == null || request.observations().isBlank() ? null : request.observations().trim(), current.createdAt(),
                 request.status() == OrderStatus.ASSIGNED ? now : current.assignedAt(),
                 request.status() == OrderStatus.IN_PROGRESS ? now : current.startedAt(),
                 request.status() == OrderStatus.CLOSED ? now : current.closedAt(),
                 request.status() == OrderStatus.CANCELLED ? now : current.cancelledAt(), now));
+        eventPublisher.publishStatusChange(updated);
+        return updated;
     }
 
     private void validateTransition(OrderStatus from, OrderStatus to) {
