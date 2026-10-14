@@ -18,7 +18,8 @@ import cl.duoc.digitalfix.workorders.domain.WorkOrder;
 
 /**
  * Publica comandos en cmd.direct según el nuevo estado de la orden:
- * ASSIGNED -> email + ticket de despacho; EN_ROUTE -> email; CLOSED -> email + informe PDF.
+ * cada estado posterior a CREATED genera una notificación; ASSIGNED también genera
+ * un ticket de despacho y CLOSED también solicita el informe PDF.
  * Un fallo de publicación se registra pero no revierte el cambio de estado ya persistido.
  */
 @Component
@@ -40,11 +41,13 @@ public class RabbitWorkOrderEventPublisher implements WorkOrderEventPublisher {
                 send(RabbitMQConfig.RK_DISPATCH, "DISPATCH_TICKET_REQUESTED", order);
             }
             case EN_ROUTE -> send(RabbitMQConfig.RK_EMAIL, "EMAIL_TECHNICIAN_EN_ROUTE", order);
+            case IN_PROGRESS -> send(RabbitMQConfig.RK_EMAIL, "EMAIL_WORK_STARTED", order);
             case CLOSED -> {
                 send(RabbitMQConfig.RK_EMAIL, "EMAIL_ORDER_CLOSED", order);
                 send(RabbitMQConfig.RK_REPORT, "REPORT_GENERATION_REQUESTED", order);
             }
-            default -> { }
+            case CANCELLED -> send(RabbitMQConfig.RK_EMAIL, "EMAIL_ORDER_CANCELLED", order);
+            case CREATED -> log.debug("No se publica evento de estado CREATED para orderId={}", order.id());
         }
     }
 
@@ -61,6 +64,19 @@ public class RabbitWorkOrderEventPublisher implements WorkOrderEventPublisher {
             });
             log.info("Comando publicado type={} routingKey={} eventId={} orderId={}",
                     type, routingKey, envelope.eventId(), order.id());
+            System.out.println("""
+
+                    ========== LLAMADA A NOTIFY (RABBITMQ) ==========
+                    Exchange     : %s
+                    Routing key  : %s
+                    Type         : %s
+                    Event ID     : %s
+                    Trace ID     : %s
+                    Correlation  : %s
+                    Payload      : %s
+                    =================================================
+                    """.formatted(RabbitMQConfig.EXCHANGE_DIRECT, routingKey, type, envelope.eventId(),
+                    envelope.traceId(), envelope.correlationId(), envelope.payload()));
         } catch (Exception e) {
             log.error("No se pudo publicar type={} routingKey={} orderId={}", type, routingKey, order.id(), e);
         }
