@@ -43,7 +43,7 @@ Si la base ya fue creada antes de agregar observaciones y cancelación, ejecuta 
 
 ## Ejecutar y probar
 
-Requiere un RabbitMQ accesible (por defecto `localhost:5672`, UI en `http://localhost:15672`, `guest/guest`) y, para ver el consumo, `ms-digitalfix-notify` en ejecución.
+Requiere un RabbitMQ accesible (clúster local de `docker-compose.yml`: AMQP `localhost:5672` y `localhost:5673`, UI `http://localhost:15672` / `15673`, usuario `admin` / `admin123`) y, para ver el consumo, `ms-digitalfix-notify` en ejecución.
 
 ```powershell
 mvn clean verify
@@ -132,7 +132,9 @@ Todos los estados alcanzables desde `PUT /{id}/status` publican al menos una not
 
 ### Variables de entorno
 
-`RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_USERNAME`, `RABBITMQ_PASSWORD`, `RABBITMQ_VHOST` (por defecto `localhost:5672`, `guest/guest`, `/`).
+`RABBITMQ_ADDRESSES` (opcional; lista de nodos, p. ej. `localhost:5672,localhost:5673`), `RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_USERNAME`, `RABBITMQ_PASSWORD`, `RABBITMQ_VHOST`. Si `RABBITMQ_ADDRESSES` se define, Spring AMQP la usa en lugar de host/port para intentar conexión a ambos nodos; las credenciales deben coincidir con el clúster.
+
+Este productor solo declara el exchange `cmd.direct`; la metadata de exchanges, colas y bindings se replica entre nodos. Las colas quorum declaradas por notify replican también los mensajes. `queue_leader_locator=balanced` distribuye líderes de colas clásicas, pero no replica sus mensajes. Con dos nodos, una quorum queue necesita ambos para conservar mayoría; para tolerar la caída de un nodo, RabbitMQ recomienda tres nodos.
 
 ### Salida por consola (demostración)
 
