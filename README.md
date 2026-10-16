@@ -43,7 +43,7 @@ Si la base ya fue creada antes de agregar observaciones y cancelación, ejecuta 
 
 ## Ejecutar y probar
 
-Requiere un RabbitMQ accesible (clúster local de `docker-compose.yml`: AMQP `localhost:5672` y `localhost:5673`, UI `http://localhost:15672` / `15673`, usuario `admin` / `admin123`) y, para ver el consumo, `ms-digitalfix-notify` en ejecución.
+Requiere un RabbitMQ accesible (clúster local de `docker-compose.yml`: AMQP `localhost:5672` y `localhost:5673`, UI `http://localhost:15672` / `15673`, usuario `admin` / `admin`) y, para ver el consumo, `ms-digitalfix-notify` en ejecución.
 
 ```powershell
 mvn clean verify
