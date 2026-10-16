@@ -22,7 +22,11 @@ env:
   DB_NAME: ${{ secrets.DB_NAME }}
   DB_USER: ${{ secrets.DB_USER }}
   DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-
+  RABBITMQ_HOST: ${{ secrets.RABBITMQ_HOST }}
+  RABBITMQ_PORT: ${{ secrets.RABBITMQ_PORT }}
+  RABBITMQ_USERNAME: ${{ secrets.RABBITMQ_USERNAME }}
+  RABBITMQ_PASSWORD: ${{ secrets.RABBITMQ_PASSWORD }}
+  RABBITMQ_VHOST: ${{ secrets.RABBITMQ_VHOST }}
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
@@ -42,7 +46,7 @@ jobs:
 
       - name: Validate deployment configuration
         run: |
-          for name in TARGET_HOST_IP DB_HOST DB_PORT DB_NAME DB_USER DB_PASSWORD; do
+          for name in TARGET_HOST_IP DB_HOST DB_PORT DB_NAME DB_USER DB_PASSWORD RABBITMQ_HOST RABBITMQ_PASSWORD; do
             if [ -z "${!name}" ]; then echo "Missing GitHub variable/secret: $name"; exit 1; fi
           done
 
@@ -74,12 +78,17 @@ jobs:
           DB_NAME: ${{ env.DB_NAME }}
           DB_USER: ${{ env.DB_USER }}
           DB_PASSWORD: ${{ env.DB_PASSWORD }}
+          RABBITMQ_HOST: ${{ env.RABBITMQ_HOST }}
+          RABBITMQ_PORT: ${{ env.RABBITMQ_PORT }}
+          RABBITMQ_USERNAME: ${{ env.RABBITMQ_USERNAME }}
+          RABBITMQ_PASSWORD: ${{ env.RABBITMQ_PASSWORD }}
+          RABBITMQ_VHOST: ${{ env.RABBITMQ_VHOST }}
         with:
           host: ${{ vars.TARGET_HOST_IP }}
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
-          envs: GHCR_TOKEN,GHCR_USER,IMAGE,CONTAINER_NAME,DB_HOST,DB_PORT,DB_NAME,DB_USER,DB_PASSWORD
+          envs: GHCR_TOKEN,GHCR_USER,IMAGE,CONTAINER_NAME,DB_HOST,DB_PORT,DB_NAME,DB_USER,DB_PASSWORD,RABBITMQ_HOST,RABBITMQ_PORT,RABBITMQ_USERNAME,RABBITMQ_PASSWORD,RABBITMQ_VHOST
           script: |
             if [ -z "$GHCR_TOKEN" ]; then echo "Missing GH_CR_PAT"; exit 1; fi
             if ! command -v docker >/dev/null 2>&1; then
@@ -94,5 +103,8 @@ jobs:
             sudo docker run -d --name "$CONTAINER_NAME" --network digitalfix-backend-net --restart unless-stopped \
               -e SERVER_PORT=8081 -e DB_HOST="$DB_HOST" -e DB_PORT="$DB_PORT" -e DB_NAME="$DB_NAME" \
               -e DB_SCHEMA=workorders -e DB_USER="$DB_USER" -e DB_PASSWORD="$DB_PASSWORD" -e DB_SSL_MODE=require \
+              -e RABBITMQ_HOST="$RABBITMQ_HOST" -e RABBITMQ_PORT="${RABBITMQ_PORT:-5672}" \
+              -e RABBITMQ_USERNAME="${RABBITMQ_USERNAME:-admin}" -e RABBITMQ_PASSWORD="$RABBITMQ_PASSWORD" \
+              -e RABBITMQ_VHOST="${RABBITMQ_VHOST:-/}" \
               "$IMAGE"
             sudo docker image prune -f
