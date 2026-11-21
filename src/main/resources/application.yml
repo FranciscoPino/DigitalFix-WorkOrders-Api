@@ -3,6 +3,14 @@ spring:
     import: optional:file:.env[.properties]
   application:
     name: ms-digitalfix-workorders
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:19092,localhost:19093,localhost:19094}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      properties:
+        max.block.ms: 5000
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:digitalfix}?sslmode=${DB_SSL_MODE:require}
     username: ${DB_USER:digitalfix_admin}

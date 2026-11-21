@@ -1,6 +1,6 @@
 # ms-digitalfix-workorders
 
-Microservicio de órdenes de trabajo de DigitalFix. Es propietario del modelo y de las reglas del ciclo de vida de las órdenes y es el **productor de comandos RabbitMQ** hacia `ms-digitalfix-notify`.
+Microservicio de órdenes de trabajo de DigitalFix. Es propietario del modelo y de las reglas del ciclo de vida de las órdenes, productor de comandos RabbitMQ y productor Kafka para report y audit.
 
 ## Arquitectura y patrón
 
@@ -40,6 +40,16 @@ PUT /api/workorders/{id}/status
 Completa `.env` con `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` y `DB_SSL_MODE=require`, y las variables de RabbitMQ (ver más abajo). El servicio importa ese archivo desde su directorio de ejecución. En el arranque, `TechnicianSeeder` inserta/actualiza de forma idempotente (vía JPA) tres técnicos de demostración; sus UUID están en esa clase.
 
 Si la base ya fue creada antes de agregar observaciones y cancelación, ejecuta una vez [`alter-workorders-observations-cancel.sql`](../alter-workorders-observations-cancel.sql) contra `digitalfix`.
+
+Para una base existente ejecuta también [`add-workorders-kafka-outbox.sql`](../add-workorders-kafka-outbox.sql): agrega el trigger para eventos de creación. Los cambios de estado ya usan el trigger de outbox existente. No genera eventos retroactivos de creación para órdenes anteriores.
+
+Antes de iniciar el relay, ejecuta [`add-kafka-outbox-quarantine.sql`](../add-kafka-outbox-quarantine.sql) en bases existentes. Los eventos inválidos quedan en la outbox con `quarantined_at` y `last_error`, sin enviarse a Kafka; el relay continúa con los demás. Consulta `SELECT event_id, payload, last_error FROM integration.outbox_events WHERE quarantined_at IS NOT NULL`. Tras revisar y corregir el payload, un operador puede poner `quarantined_at` y `last_error` en NULL para reintentarlo. La reparación puede publicar un evento antiguo después de eventos posteriores de la misma orden; revisa sus efectos antes de reintentarlo. No se crea una DLT para el productor.
+
+Para Kafka, inicia el [clúster local](../kafka/README.md). Por defecto se conecta a `localhost:19092,localhost:19093,localhost:19094`; configura `KAFKA_BOOTSTRAP_SERVERS`, `KAFKA_WORKORDERS_TOPIC`, `KAFKA_AUDIT_TOPIC` y `KAFKA_OUTBOX_POLL_MS` si necesitas cambiarlos.
+
+El relay consulta `integration.outbox_events` cada 5 segundos y publica cada evento en `workorders.events` y `audit.timeline`. Solo marca la fila como publicada cuando ambos envíos reciben confirmación. Un fallo deja la fila pendiente y registra `attempts` y `last_error`; el procesamiento posterior espera al evento fallido. Un reintento puede producir duplicados con el mismo `eventId`. El relay solo procesa registros `WORK_ORDER`. Si se activa en una base existente, publicará también sus filas de outbox pendientes.
+
+El envelope enviado incluye `schemaVersion: 1`, `eventId`, `eventType`, `aggregateType`, `aggregateId`, `createdAt` y `payload`. Se exige un payload objeto con `workOrderId` igual al agregado, `status` válido y `eventType` igual a `WORK_ORDER_<status>`; `changedBy`, si está presente, debe ser texto o null. El campo de versión es adicional: los consumidores existentes siguen aceptando eventos anteriores sin él.
 
 ## Ejecutar y probar
 
@@ -143,7 +153,7 @@ Cada comando publicado imprime en la consola del servicio un bloque `LLAMADA A N
 ### Limitaciones
 
 - La publicación ocurre después de persistir el cambio de estado y un fallo solo se registra en el log (no revierte la orden).
-- No hay *publisher confirms* ni patrón outbox: si se requiere entrega garantizada, publicar desde `integration.outbox_events` en vez de directamente.
+- Para RabbitMQ no hay *publisher confirms* ni patrón outbox; la outbox de Kafka es independiente.
 - Si el consumer nunca se inició, las colas/bindings no existen y el broker descarta el mensaje sin error.
 
 ## Demo: provocar un mensaje a DLQ
